@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es-PE">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Punto Técnico – Demo de consulta</title>
+<meta name="description" content="Demostración de portafolio: consulta para un servicio técnico ficticio.">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="demo-bar" role="note">
+  DEMOSTRACIÓN · Servicio técnico ficticio. No envía solicitudes ni guarda datos personales.
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="back" href="../../#proyectos">← Portafolio</a><div class="app-brand"><span class="app-icon">PT</span><div><h1>Punto Técnico</h1><span class="app-sub">CENTRO DE ASISTENCIA / DEMO</span></div></div>
+    <p>Cuéntanos qué ocurre. Prepara una consulta clara para la revisión de tu equipo.</p>
+  </div>
+</header>
+
+<main class="wrap layout"><div class="workspace-title"><span>ÁREA DE CONSULTAS</span><h2>Vamos a revisar ese equipo.</h2><p>Elige las opciones y completa tu ficha de consulta.</p></div>
+  <div class="steps">
+    <section class="step" aria-labelledby="s1">
+      <h2 id="s1"><span>1</span> ¿Qué servicio necesitas?</h2>
+      <div id="services" class="choices"></div>
+    </section>
+
+    <section class="step" aria-labelledby="s2">
+      <h2 id="s2"><span>2</span> ¿Qué equipo es?</h2>
+      <div id="devices" class="choices small"></div>
+    </section>
+
+    <section class="step" aria-labelledby="s3">
+      <h2 id="s3"><span>3</span> Describe la falla</h2>
+      <label class="field" for="issue">¿Qué le pasa al equipo?</label>
+      <textarea id="issue" rows="4" maxlength="300" placeholder="Ejemplo: no enciende desde ayer y huele a quemado."></textarea>
+      <div class="meta"><span class="hint">Toca una frase para agregarla:</span><span id="count" class="hint">0 / 300</span></div>
+      <div id="chips" class="chips"></div>
+      <p class="hint">No escribas datos personales, contraseñas ni direcciones.</p>
+    </section>
+
+    <section class="step" aria-labelledby="s4">
+      <h2 id="s4"><span>4</span> Modalidad de atención</h2>
+      <div id="modes" class="choices small"></div>
+      <p id="mode-note" class="hint"></p>
+    </section>
+  </div>
+
+  <aside class="panel" aria-labelledby="rt">
+    <div class="ticket-label">FICHA DE CONSULTA · DEMO</div><h2 id="rt">Tu caso, en orden.</h2>
+    <pre id="summary" class="summary" tabindex="0"></pre>
+    <p id="missing" class="missing"></p>
+    <div class="actions">
+      <button type="button" id="copy" class="btn primary">Copiar resumen</button>
+      <button type="button" id="reset" class="btn danger">Reiniciar consulta</button>
+    </div>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+
+    <div class="notice">
+      <strong>Importante</strong>
+      <p>El diagnóstico, el precio y el plazo dependen de la evaluación del equipo por parte del técnico. Esta demo no los calcula ni los estima.</p>
+      <p>Puedes editar cualquier paso cuando quieras. Esto no es una solicitud: solo se copia el texto del resumen.</p>
+    </div>
+  </aside>
+</main>
+
+<footer class="foot">
+  <div class="wrap">Proyecto de portafolio · Punto Técnico es un negocio inventado; servicios y textos son ficticios.</div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>

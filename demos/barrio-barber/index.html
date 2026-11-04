@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es-PE">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Barrio Barber – Demo de reserva</title>
+<meta name="description" content="Demostración de portafolio: solicitud de cita para una barbería ficticia.">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="demo-bar" role="note">
+  DEMOSTRACIÓN · Barbería ficticia. No verifica disponibilidad real, no confirma reservas, no envía mensajes y no guarda datos.
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="back" href="../../#proyectos">← Portafolio de Martin</a><div class="edition">ESTILO DE BARRIO / DEMO 02</div><h1>BARRIO<br><em>BARBER.</em></h1>
+    <p>Un buen corte empieza con un buen momento. Elige el tuyo.</p>
+  </div>
+  <div class="pole" aria-hidden="true"></div>
+</header>
+
+<main class="wrap layout"><div class="booking-top"><span>TU PRÓXIMO CORTE</span><strong id="wizard-progress">01 / 05</strong></div><nav class="wizard-nav" aria-label="Pasos de la solicitud"><button type="button" data-stage="0">Servicio</button><button type="button" data-stage="1">Barbero</button><button type="button" data-stage="2">Horario</button><button type="button" data-stage="3">Nombre</button><button type="button" data-stage="4">Resumen</button></nav>
+  <div class="steps">
+    <section class="step" aria-labelledby="s1">
+      <h2 id="s1"><span>1</span> Elige un servicio</h2>
+      <div id="services" class="choices"></div>
+    </section>
+
+    <section class="step" aria-labelledby="s2">
+      <h2 id="s2"><span>2</span> Elige un barbero</h2>
+      <div id="barbers" class="choices small"></div>
+    </section>
+
+    <section class="step" aria-labelledby="s3">
+      <h2 id="s3"><span>3</span> Fecha y hora</h2>
+      <label class="field" for="date">Fecha (hoy o una fecha futura)</label>
+      <input type="date" id="date">
+      <p id="date-err" class="err" role="alert"></p>
+      <p class="hint">Los horarios son de ejemplo y no reflejan disponibilidad real.</p>
+      <div id="slots" class="slots" aria-live="polite"></div>
+    </section>
+
+    <section class="step" aria-labelledby="s4">
+      <h2 id="s4"><span>4</span> Nombre del cliente</h2>
+      <label class="field" for="name">Usa un nombre ficticio, por ejemplo “Cliente Demo”</label>
+      <div class="row">
+        <input type="text" id="name" maxlength="30" autocomplete="off" placeholder="Cliente Demo">
+        <button type="button" id="sample" class="btn">Usar nombre de ejemplo</button>
+      </div>
+      <p class="hint">No escribas datos reales: nada se guarda ni se envía.</p>
+    </section>
+  </div>
+
+  <aside class="panel" aria-labelledby="rt">
+    <h2 id="rt">Resumen de tu solicitud</h2>
+    <pre id="summary" class="summary" tabindex="0"></pre>
+    <p id="missing" class="missing"></p>
+    <div class="actions">
+      <button type="button" id="copy" class="btn primary">Copiar resumen</button>
+      <button type="button" id="reset" class="btn danger">Cancelar selección</button>
+    </div>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <p class="hint">Puedes cambiar cualquier paso cuando quieras. Esto no es una reserva: solo se copia el texto.</p>
+  </aside><div id="wizard-error" role="status"></div><div class="wizard-actions"><button class="btn" id="wizard-prev" type="button">← Atrás</button><button class="btn primary" id="wizard-next" type="button">Continuar →</button></div>
+</main>
+
+<footer class="foot">
+  <div class="wrap">Proyecto de portafolio · Barrio Barber es un negocio inventado; servicios, precios y nombres son ficticios.</div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
