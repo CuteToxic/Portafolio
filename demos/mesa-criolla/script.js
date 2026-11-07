@@ -1,175 +1,149 @@
 "use strict";
-
-// Datos ficticios de la carta (precios en soles)
-const MENU = [
-  { cat: "Entradas", items: [
-    { id: "e1", name: "Ceviche clásico", desc: "Pescado del día, limón, ají limo, camote y choclo.", price: 38 },
-    { id: "e2", name: "Causa limeña", desc: "Papa amarilla rellena de pollo, palta y mayonesa casera.", price: 24 },
-    { id: "e3", name: "Anticuchos de corazón", desc: "Brochetas a la parrilla con papa dorada y ají panca.", price: 28 },
-    { id: "e4", name: "Papa a la huancaína", desc: "Crema de ají amarillo y queso fresco sobre papa sancochada.", price: 18 }
-  ]},
-  { cat: "Fondos", items: [
-    { id: "f1", name: "Lomo saltado", desc: "Res salteada al wok con cebolla, tomate, papas fritas y arroz.", price: 36 },
-    { id: "f2", name: "Ají de gallina", desc: "Pollo deshilachado en crema de ají amarillo, con arroz y papa.", price: 30 },
-    { id: "f3", name: "Arroz con pollo", desc: "Arroz al culantro con presa de pollo y zarza criolla.", price: 28 },
-    { id: "f4", name: "Tallarines verdes con bistec", desc: "Pesto peruano de albahaca y espinaca, con bistec a la plancha.", price: 32 },
-    { id: "f5", name: "Seco de res", desc: "Guiso de res al culantro con frejoles canarios y arroz.", price: 34 }
-  ]},
-  { cat: "Postres", items: [
-    { id: "p1", name: "Suspiro a la limeña", desc: "Manjar blanco con merengue al oporto.", price: 14 },
-    { id: "p2", name: "Picarones", desc: "Anillos de zapallo y camote con miel de chancaca.", price: 16 },
-    { id: "p3", name: "Mazamorra morada", desc: "Maíz morado, frutas y canela, servida tibia.", price: 10 }
-  ]},
-  { cat: "Bebidas", items: [
-    { id: "b1", name: "Chicha morada (jarra)", desc: "Maíz morado, piña, membrillo y canela. 1 litro.", price: 18 },
-    { id: "b2", name: "Limonada frozen", desc: "Limón y hielo, con hierbabuena.", price: 12 },
-    { id: "b3", name: "Jugo de maracuyá", desc: "Pulpa natural, sin azúcar añadida.", price: 10 },
-    { id: "b4", name: "Inca Kola 500 ml", desc: "Bien fría.", price: 7 }
-  ]}
-];
-
-const DELIVERY_FEE = 5;
-const ALL = MENU.flatMap(c => c.items);
-const find = id => ALL.find(i => i.id === id);
-const money = n => "S/ " + n.toFixed(2);
-
-const state = { cart: {}, mode: "recojo", cat: MENU[0].cat };
-const $ = id => document.getElementById(id);
-
-// ---------- Carta ----------
-function renderTabs() {
-  $("tabs").innerHTML = MENU.map(c =>
-    `<button class="tab" data-cat="${c.cat}" aria-pressed="${c.cat === state.cat}">${c.cat}</button>`
-  ).join("");
+const CONFIG = {"kind": "food", "slug": "mesa-criolla", "name": "Mesa Criolla", "short": "MC", "tagline": "COCINA & OPERACIONES", "title": "Todo listo para el servicio.", "subtitle": "Controla tu cocina, registra una venta y sigue cada pedido hasta su entrega.", "unit": "pedido", "plural": "Pedidos", "people": "Clientes", "catalog": "Carta y stock", "main": "Cocina en vivo", "second": "Nueva venta", "states": ["Pendiente", "Preparando", "Listo", "Entregado", "Cancelado"], "staff": ["Cocina principal", "Barra"], "products": [["Arroz con pollo", "Platos de fondo", 24, 35], ["Lomo saltado", "Platos de fondo", 32, 24], ["Ají de gallina", "Platos de fondo", 25, 30], ["Causa limeña", "Entradas", 16, 20], ["Chicha morada", "Bebidas", 8, 40], ["Maracuyá", "Bebidas", 8, 35]], "customers": ["Ana Torres", "Luis Rojas", "María Castro", "Carlos Vega", "Sofía Ruiz", "Jorge Soto"]};
+(() => {
+const C=CONFIG, $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=v=>String(v??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
+const money=n=>new Intl.NumberFormat('es-PE',{style:'currency',currency:'PEN'}).format(Number(n)||0);
+const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
+const stamp=()=>new Date().toISOString();
+const pretty=d=>new Date(d+'T12:00:00').toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long'});
+const mins=t=>{const [h,m]=t.split(':').map(Number);return h*60+m;};
+const key='martin-system-v3-'+C.kind;
+let storageOK=true, view='home', search='', filter='', day=today(), cart=[], activeId=null, focusBeforeModal=null;
+function seed(){
+ const products=C.products.map((p,i)=>({id:'p'+(i+1),name:p[0],category:p[1],price:p[2],stock:C.kind==='barber'?0:p[3],duration:C.kind==='barber'?p[3]:0,active:true}));
+ const customers=C.customers.map((n,i)=>({id:'c'+(i+1),name:n,phone:'',note:['Prefiere atención por la tarde','Cliente de ejemplo',''][i%3]}));
+ const states=C.states.filter(s=>!s.startsWith('Cancel'));
+ const records=customers.map((c,i)=>{const product=products[i%products.length], status=states[i%states.length];return {id:(C.kind==='food'?'PED':C.kind==='barber'?'CIT':'OT')+'-'+String(101+i).padStart(4,'0'),customerId:c.id,date:today(),time:['09:00','10:00','11:00','12:00','15:00','16:00'][i],staff:C.staff[i%3%C.staff.length],status,created:stamp(),note:C.kind==='food'?['Sin ají','Servir con cubiertos',''][i%3]:C.kind==='barber'?'Preferencia de estilo por confirmar.':'Verificar accesorios al ingreso. Equipo de demostración.',channel:['Mesa 04','Recojo','Delivery'][i%3],items:C.kind==='food'?[{productId:product.id,name:product.name,price:product.price,qty:i%2+1}]:[],serviceId:product.id,serviceName:product.name,duration:product.duration||45,total:C.kind==='food'?product.price*(i%2+1):C.kind==='barber'?product.price:80+i*25,deposit:C.kind==='tech'?30:0,equipment:['Laptop Lenovo IdeaPad','Samsung Galaxy A54','PC de escritorio','iPhone 12','Laptop HP Pavilion','Tablet Samsung'][i],problem:['No enciende','Pantalla dañada','Equipo lento','No carga','Se apaga al usarlo','Batería dura poco'][i],diagnosis:i>1?'Revisión inicial completada. Presupuesto de ejemplo pendiente de validación.':'',parts:[],history:[{date:stamp(),text:'Registro de ejemplo creado'},{date:stamp(),text:'Estado de ejemplo: '+status}]};});
+ return {version:3,products,customers,records,next:107};
 }
-
-function renderMenu() {
-  const cat = MENU.find(c => c.cat === state.cat);
-  $("menu").innerHTML = cat.items.map(i => `
-    <article class="dish">
-      <h3>${i.name}</h3>
-      <span class="price">${money(i.price)}</span>
-      <p>${i.desc}</p>
-      <button class="btn" data-add="${i.id}" aria-label="Agregar ${i.name} al pedido">Agregar</button>
-    </article>`).join("");
+let state;
+try{const raw=localStorage.getItem(key);state=raw?JSON.parse(raw):seed();if(state.version!==3||!Array.isArray(state.records)||!Array.isArray(state.products)||!Array.isArray(state.customers))throw Error();}catch(e){state=seed();}
+function save(){try{localStorage.setItem(key,JSON.stringify(state));storageOK=true;}catch(e){storageOK=false;toast('No se pudo guardar. Los cambios durarán hasta cerrar esta página.');}updateStorage();}
+function updateStorage(){const tag=$('.local-tag');if(tag)tag.textContent=storageOK?'◉ Guardado local':'⚠ Sin almacenamiento';}
+function toast(t){$('#toast').textContent=t;$('#toast').classList.add('toast-visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('#toast').classList.remove('toast-visible'),3500);}
+const customer=r=>state.customers.find(x=>x.id===r.customerId)||{name:'Cliente eliminado',phone:'',note:''};
+const badge=s=>`<span class="badge ${s.startsWith('Cancel')?'cancelled':'b'+C.states.indexOf(s)}">${esc(s)}</span>`;
+const btn=(text,action,id='',cls='')=>`<button type="button" class="btn ${cls}" data-action="${action}"${id?` data-id="${esc(id)}"`:''}>${text}</button>`;
+const hint=t=>`<p class="muted">${t}</p>`;
+const empty=(title,sub='Prueba otro filtro o crea un registro de ejemplo.')=>`<div class="empty"><strong>${title}</strong>${sub}</div>`;
+const head=(title,sub,action='')=>`<div class="page-head"><div><p class="eyebrow">${C.kind==='food'?'SERVICIO EN MARCHA':C.kind==='barber'?'BARRIO / DAILY OPERATIONS':'CENTRO DE OPERACIONES'}</p><h1>${title}</h1><p class="lead">${sub}</p></div>${action}</div>`;
+const field=(label,name,value='',type='text',attrs='')=>`<div class="field"><label for="f-${name}">${label}</label><input id="f-${name}" name="${name}" type="${type}" value="${esc(value)}" ${attrs}></div>`;
+const area=(label,name,value='',attrs='')=>`<div class="field full"><label for="f-${name}">${label}</label><textarea id="f-${name}" name="${name}" maxlength="1500" ${attrs}>${esc(value)}</textarea></div>`;
+const select=(label,name,options,value='',attrs='')=>`<div class="field"><label for="f-${name}">${label}</label><select id="f-${name}" name="${name}" ${attrs}>${options.map(o=>{const [v,t]=Array.isArray(o)?o:[o,o];return `<option value="${esc(v)}" ${v===value?'selected':''}>${esc(t)}</option>`;}).join('')}</select></div>`;
+function modal(title,body){focusBeforeModal=document.activeElement;$('#modal-content').innerHTML=`<div class="modal-head"><h2>${title}</h2><button class="close" data-action="close" aria-label="Cerrar ventana">×</button></div><div class="modal-body">${body}</div>`;if(!$('#modal').open)$('#modal').showModal();}
+function closeModal(){$('#modal').close();if(focusBeforeModal?.isConnected)focusBeforeModal.focus();}
+$('#modal').addEventListener('close',()=>{if(focusBeforeModal?.isConnected)focusBeforeModal.focus();});
+const optionsCustomers=()=>state.customers.map(c=>[c.id,c.name]);
+const formEnd=(label='Guardar registro')=>`<p class="form-error" role="alert" id="form-error"></p><div class="modal-actions">${btn('Cancelar','close')}<button class="btn primary" type="submit">${label}</button></div>`;
+function navigate(next){view=next;search='';filter='';render();}
+function nav(){const links=[['home',C.main,'◫'],[C.kind==='food'?'pos':'records',C.second,'＋'],['customers',C.people,'◎'],['catalog',C.catalog,'▦'],['reports','Resumen y reportes','↗'],['settings','Datos de la demo','⚙']];$('#nav').innerHTML=links.map(([v,t,s])=>`<button class="nav-btn ${view===v?'active':''}" data-view="${v}" ${view===v?'aria-current="page"':''}><span class="symbol">${s}</span>${t}</button>`).join('');$('#crumb').textContent=links.find(x=>x[0]===view)?.[1]||C.main;}
+function stats(){const rs=state.records.filter(r=>r.date===day), done=C.states.at(-2), pending=rs.filter(r=>r.status!==done&&!r.status.startsWith('Cancel')).length, sum=rs.filter(r=>r.status===done).reduce((s,r)=>s+r.total,0), active=rs.filter(r=>r.status!==done&&!r.status.startsWith('Cancel'));return `<div class="stats">${[[C.plural+' del día',rs.length,'Fecha seleccionada'],['Pendientes',pending,'Sin terminar o cancelar'],[C.kind==='tech'?'Presupuesto activo':'Ingresos completados',money(C.kind==='tech'?active.reduce((s,r)=>s+r.total,0):sum),C.kind==='tech'?'Órdenes por terminar · no es cobro':'Solo registros completados'],[C.kind==='barber'?'Equipo disponible':C.kind==='food'?'Productos activos':'Repuestos con stock',C.kind==='barber'?C.staff.length:state.products.filter(p=>p.active&&(C.kind!=='tech'||p.stock>0)).length,C.kind==='barber'?'Profesionales de ejemplo':'En el catálogo']].map(([l,v,h],i)=>`<div class="stat ${i===0?'featured':''}"><span class="label">${l}</span><span class="value">${v}</span><span class="hint">${h}</span></div>`).join('')}</div>`;}
+function dateToolbar(){return `<div class="toolbar"><label for="selected-day">Fecha de trabajo</label><input id="selected-day" type="date" value="${day}" style="flex:0 1 180px">${btn('Hoy','today','','small')}<span class="muted">${esc(pretty(day))}</span></div>`;}
+function recordTotal(r){return money(r.total);}
+function recordTable(rs){if(!rs.length)return empty('No hay '+C.plural.toLowerCase()+' para mostrar.');return `<div class="table-wrap"><table><thead><tr><th>Referencia / cliente</th><th>${C.kind==='tech'?'Equipo / falla':C.kind==='barber'?'Servicio / profesional':'Detalle / modalidad'}</th><th>Fecha / hora</th><th>Estado</th><th>${C.kind==='tech'?'Presupuesto':'Importe'}</th><th>Acción</th></tr></thead><tbody>${rs.map(r=>`<tr><td><strong>${esc(r.id)}</strong><div class="sub">${esc(customer(r).name)}</div></td><td>${esc(C.kind==='tech'?r.equipment:C.kind==='barber'?r.serviceName:r.items.map(i=>i.qty+' × '+i.name).join(', '))}<div class="sub">${esc(C.kind==='tech'?r.problem:C.kind==='barber'?r.staff:r.channel)}</div></td><td>${esc(r.date)}<div class="sub">${esc(r.time)}</div></td><td>${badge(r.status)}</td><td><strong>${recordTotal(r)}</strong></td><td>${btn('Ver ficha ↗','detail',r.id,'small')}</td></tr>`).join('')}</tbody></table></div>`;}
+function home(){const add=btn('+ '+(C.kind==='food'?'Nueva venta':C.kind==='barber'?'Agendar cita':'Ingresar equipo'),C.kind==='food'?'pos':'new-record','','primary');let html=head(C.title,C.subtitle,add)+dateToolbar()+stats();
+ if(C.kind==='food'){
+  html+=`<div class="section-title"><h2>Pedidos en cocina</h2>${btn('Ver historial','records','','small')}</div><div class="board">${C.states.slice(0,3).map((s,i)=>{const rs=state.records.filter(r=>r.date===day&&r.status===s);return `<section class="column"><div class="column-head"><span>${s}</span><span>${String(rs.length).padStart(2,'0')}</span></div>${rs.length?rs.map(r=>`<article class="ticket"><div class="ticket-top"><span class="ticket-id">${esc(r.id)}</span><time>${esc(r.time)}</time></div><h3>${esc(customer(r).name)}</h3><span class="badge b${i}">${esc(r.channel)}</span><div class="items">${r.items.map(p=>`${p.qty} × ${esc(p.name)}`).join('<br>')}${r.note?`<br><b>Nota: ${esc(r.note)}</b>`:''}</div><div class="ticket-bottom"><span>${recordTotal(r)}</span><span class="muted">${esc(r.staff)}</span></div>${btn(i===0?'Comenzar preparación →':i===1?'Marcar listo →':'Entregar pedido ✓','advance',r.id,'primary small')}${btn('Ver / editar pedido','detail',r.id,'small')}</article>`).join(''):empty('Sin pedidos','Los nuevos pedidos aparecerán aquí.')}</section>`;}).join('')}</div>`;
+ }else if(C.kind==='barber'){
+  html+=`<div class="panel calendar-wrap"><div class="panel-head"><div><h2>La agenda de tu equipo</h2><p>Selecciona una cita para abrir su ficha. Se evitan cruces por profesional.</p></div><span class="count">09:00 — 19:00</span></div><div class="calendar"><div class="calendar-head">Hora</div>${C.staff.map(s=>`<div class="calendar-head">${esc(s)}</div>`).join('')}${Array.from({length:10},(_,i)=>i+9).map(h=>`<div class="cal-time">${h}:00</div>${C.staff.map(s=>`<div class="cal-cell">${state.records.filter(r=>r.date===day&&r.staff===s&&r.status!=='Cancelada'&&r.status!=='Cancelado'&&Number(r.time.split(':')[0])===h).map(r=>`<button class="appointment ${r.status==='Completada'?'done':''}" data-action="detail" data-id="${r.id}" aria-label="Abrir cita de ${esc(customer(r).name)} a las ${r.time}"><span>${r.time} · ${r.duration} min</span><strong>${esc(customer(r).name)}</strong><span>${esc(r.serviceName)}</span><br><span>${esc(r.status)}</span></button>`).join('')}</div>`).join('')}`).join('')}</div></div>`;
+ }else{
+  const open=state.records.filter(r=>r.status!=='Entregado'&&r.status!=='Cancelado');html+=`<div class="split"><section class="panel"><div class="panel-head"><div><h2>Órdenes que requieren atención</h2><p>Todas las fechas · priorizadas por ingreso</p></div><span class="count">${open.length} activas</span></div>${compactRecords(open)}</section><aside class="panel"><div class="panel-head"><h2>Estado del taller</h2></div><div class="panel-body">${statusChart(state.records)}<div class="note">${state.products.filter(p=>p.stock<=5&&p.active).length} repuestos con 5 unidades o menos.<br>Consulta el inventario antes de asignar piezas.</div>${btn('Revisar repuestos','catalog','','w100')}</div></aside></div>`;
+ }return html;}
+function compactRecords(rs){return rs.length?`<div class="table-wrap compact"><table><thead><tr><th>Orden / cliente</th><th>Equipo</th><th>Estado / ficha</th></tr></thead><tbody>${rs.map(r=>`<tr><td><strong>${esc(r.id)}</strong><div class="sub">${esc(customer(r).name)}</div></td><td>${esc(r.equipment)}<div class="sub">${esc(r.problem)}</div></td><td>${badge(r.status)}<div style="margin-top:9px">${btn('Abrir ficha ↗','detail',r.id,'small')}</div></td></tr>`).join('')}</tbody></table></div>`:empty('Todo está atendido.','Las nuevas órdenes aparecerán aquí.');}
+function statusChart(rs){const max=Math.max(1,...C.states.map(s=>rs.filter(r=>r.status===s).length));return C.states.map(s=>{const n=rs.filter(r=>r.status===s).length;return `<div class="chart-row"><span>${s}</span><div class="chart-track"><div class="chart-bar" style="width:${n/max*100}%"></div></div><b>${n}</b></div>`;}).join('');}
+function records(){return head(C.plural+' y seguimiento','Consulta todos los registros, filtra por estado y abre cada ficha para editarla.',btn('+ '+(C.kind==='food'?'Nueva venta':'Nuevo registro'),C.kind==='food'?'pos':'new-record','','primary'))+`<div class="toolbar"><input id="search" type="search" aria-label="Buscar registros" placeholder="Buscar por nombre, referencia o detalle…" value="${esc(search)}"><select id="status-filter" aria-label="Filtrar estado"><option value="">Todos los estados</option>${C.states.map(s=>`<option ${filter===s?'selected':''}>${s}</option>`).join('')}</select>${btn('Exportar CSV','export-records','','small')}</div><section class="panel" id="record-results">${filteredRecords()}</section>`;}
+function filteredRecords(){const q=search.trim().toLocaleLowerCase('es');return recordTable([...state.records].reverse().filter(r=>(!filter||r.status===filter)&&(!q||[r.id,customer(r).name,r.equipment,r.problem,r.serviceName,r.channel,r.items.map(p=>p.name).join(' ')].join(' ').toLocaleLowerCase('es').includes(q))));}
+function catalog(){return head(C.catalog,C.kind==='barber'?'Define servicios, precios y duración. Las citas conservan el precio que tenían al crearse.':'Administra productos, precios y existencias. Los movimientos de la demo actualizan el stock.',btn('+ '+(C.kind==='barber'?'Nuevo servicio':C.kind==='food'?'Nuevo producto':'Nuevo repuesto'),'new-product','','primary'))+`<div class="toolbar"><input id="search" aria-label="Buscar catálogo" type="search" placeholder="Buscar en ${C.catalog.toLowerCase()}…" value="${esc(search)}"><span class="muted">${C.kind==='barber'?'Duración en minutos':'Se avisa cuando quedan 5 unidades o menos'}</span></div><div id="catalog-results">${productCards()}</div>`;}
+function productCards(){const ps=state.products.filter(p=>[p.name,p.category].join(' ').toLowerCase().includes(search.toLowerCase()));return ps.length?`<div class="card-grid">${ps.map(p=>`<article class="product-card"><div class="product-icon" aria-hidden="true">${C.kind==='food'?'◒':C.kind==='barber'?'✂':'▣'}</div><span class="category">${esc(p.category)}</span><h3>${esc(p.name)}</h3><p class="muted">${C.kind==='barber'?p.duration+' min de atención':p.stock+' unidades disponibles'}</p><div class="price">${money(p.price)}</div><footer><span class="badge ${!p.active?'cancelled':C.kind!=='barber'&&p.stock<=5?'b0':'b3'}">${!p.active?'Inactivo':C.kind!=='barber'&&p.stock<=5?'Stock bajo':'Activo'}</span>${btn('Editar','edit-product',p.id,'small')}</footer></article>`).join('')}</div>`:empty('No encontramos coincidencias.');}
+function customers(){return head('Una ficha para cada cliente','Nombres y notas de ejemplo. Consulta su historial de atención desde aquí.',btn('+ Nuevo cliente','new-customer','','primary'))+`<div class="toolbar"><input id="search" type="search" aria-label="Buscar clientes" placeholder="Buscar cliente…" value="${esc(search)}"></div><section class="panel" id="customer-results">${customerRows()}</section>`;}
+function customerRows(){const cs=state.customers.filter(c=>[c.name,c.phone,c.note].join(' ').toLowerCase().includes(search.toLowerCase()));return cs.length?`<div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Contacto de ejemplo</th><th>Registros</th><th>Notas</th><th>Acciones</th></tr></thead><tbody>${cs.map(c=>`<tr><td><div class="person"><span class="initials">${esc(c.name.split(' ').map(n=>n[0]).slice(0,2).join(''))}</span><strong>${esc(c.name)}</strong></div></td><td>${esc(c.phone)||'Sin teléfono'}</td><td>${state.records.filter(r=>r.customerId===c.id).length}</td><td>${esc(c.note.slice(0,55))||'—'}</td><td><div class="actions">${btn('Historial','customer-history',c.id,'small')}${btn('Editar','edit-customer',c.id,'small')}</div></td></tr>`).join('')}</tbody></table></div>`:empty('No hay clientes que coincidan.');}
+function reports(){const rs=state.records.filter(r=>r.date===day),done=C.states.at(-2),completed=rs.filter(r=>r.status===done), total=completed.reduce((s,r)=>s+r.total,0);return head('El negocio, en perspectiva.','Resumen calculado con tus registros de demostración. Los importes no representan pagos reales.',btn('Exportar registros CSV','export-records','','primary'))+dateToolbar()+stats()+`<div class="split"><section class="panel"><div class="panel-head"><div><h2>Distribución por estado</h2><p>${esc(pretty(day))}</p></div></div><div class="panel-body">${statusChart(rs)}</div></section><section class="panel"><div class="panel-head"><h2>Resumen de la fecha</h2></div><div class="panel-body"><div class="legend"><span>Completados</span><b>${completed.length}</b></div><div class="legend"><span>Cancelados</span><b>${rs.filter(r=>r.status==='Cancelado'||r.status==='Cancelada').length}</b></div><div class="legend"><span>Importe completado</span><b>${money(total)}</b></div><div class="legend"><span>Ticket promedio completado</span><b>${money(completed.length?total/completed.length:0)}</b></div><p class="muted" style="margin-top:20px">No incluye pagos, facturación tributaria ni conciliación bancaria. El CSV incluye todos los registros, con su fecha y estado, para que puedas filtrarlos.</p></div></section></div><div class="section-title"><h2>Actividad del día</h2><span class="count">${rs.length} registros</span></div><div class="panel">${recordTable(rs)}</div>`;}
+function settings(){return head('Tu espacio de pruebas.','Explora sin afectar ningún negocio real. Puedes descargar los registros o volver al punto de partida.')+`<div class="split"><section class="panel"><div class="panel-head"><h2>Qué incluye esta versión</h2></div><div class="panel-body"><h3>Un flujo completo de demostración</h3><div class="note">${C.kind==='food'?'Nueva venta → descuento de stock → cocina → entrega. La cancelación repone las unidades del pedido.':C.kind==='barber'?'Cliente → servicio → fecha y profesional → validación de horarios → atención → cita completada.':'Ingreso → diagnóstico → presupuesto → repuestos → reparación → entrega. Los repuestos asignados descuentan stock.'}</div><p class="muted">Los cambios se guardan en localStorage, únicamente en este navegador y dispositivo. Si borras los datos del navegador se perderán. La información no se comparte con otros empleados o clientes.</p><br><p class="muted">Esta versión no tiene servidor, usuarios, permisos, notificaciones, integración con WhatsApp ni pagos. Para producción se deben implementar y probar esos componentes según el alcance acordado.</p><br>${btn('Descargar copia JSON','backup')} ${btn('Exportar CSV','export-records')}</div></section><section class="panel"><div class="panel-head"><h2>Restablecer demostración</h2></div><div class="panel-body"><p class="muted">Borra los registros locales de esta demo y vuelve a cargar ejemplos con la fecha de hoy. No afecta a las otras demostraciones.</p><br>${btn('Restablecer datos de ejemplo','reset','','danger')}<br><br><a class="btn primary" href="../../#contacto">Conversar con Martin ↗</a></div></section></div>`;}
+function pos(){const ps=state.products.filter(p=>p.active&&p.name.toLowerCase().includes(search.toLowerCase()));return head('Nueva venta, sin complicaciones.','Selecciona productos, revisa el pedido y envíalo a la cocina de demostración.')+`<div class="pos-layout"><section><div class="toolbar"><input id="search" type="search" aria-label="Buscar productos para la venta" placeholder="Buscar un producto…" value="${esc(search)}"></div><div id="pos-products" class="pos-grid">${posProducts(ps)}</div></section><section class="panel"><div class="panel-head"><div><h2>Pedido actual</h2><p>Los precios se conservan al registrar</p></div><span class="count" id="cart-count">${cart.reduce((s,i)=>s+i.qty,0)} uds.</span></div><div class="panel-body"><div id="cart-items">${cartItems()}</div><form id="pos-form">${select('Cliente de ejemplo','customerId',optionsCustomers(),optionsCustomers()[0]?.[0]||'','required')}${select('Modalidad / mesa','channel',['Mesa 01','Mesa 02','Mesa 03','Mesa 04','Recojo','Delivery'],'Mesa 01')}${area('Indicaciones para cocina','note','','placeholder="Ej. Sin ají, pedido de ejemplo"')}<p class="muted">Se registrará en la fecha de trabajo: ${esc(day)}.</p><p id="form-error" class="form-error" role="alert"></p><div class="total"><span>Total del pedido</span><strong id="cart-total">${cartTotal()}</strong></div><button class="btn primary w100" type="submit">Registrar y enviar a cocina →</button></form></div></section></div>`;}
+function posProducts(ps){return ps.length?ps.map(p=>`<button class="pos-item" data-action="add-cart" data-id="${p.id}" ${p.stock===0?'disabled':''}><span>${esc(p.category)} · ${p.stock} disponibles</span><strong>${esc(p.name)}</strong><b>${money(p.price)} <span style="float:right">＋</span></b></button>`).join(''):empty('No hay productos disponibles.');}
+function cartTotal(){return money(cart.reduce((s,i)=>s+i.price*i.qty,0));}
+function cartItems(){return cart.length?cart.map(i=>`<div class="cart-line"><div><strong>${esc(i.name)}</strong><div class="sub muted">${money(i.price)} c/u</div></div><div class="qty"><button type="button" data-action="less-cart" data-id="${i.productId}" aria-label="Quitar una unidad de ${esc(i.name)}">−</button><b>${i.qty}</b><button type="button" data-action="add-cart" data-id="${i.productId}" aria-label="Añadir una unidad de ${esc(i.name)}">＋</button></div></div>`).join(''):empty('Aún no agregas productos.','Elige un producto de la carta.');}
+function refreshCart(){$('#cart-items').innerHTML=cartItems();$('#cart-total').textContent=cartTotal();$('#cart-count').textContent=cart.reduce((s,i)=>s+i.qty,0)+' uds.';}
+function render(){nav();$('#screen').innerHTML=({home,records,customers,catalog,reports,settings,pos}[view]||home)();updateStorage();}
+function productForm(id){const p=state.products.find(x=>x.id===id)||{name:'',category:'',price:0,stock:0,duration:30,active:true};activeId=id||null;modal(id?'Editar '+(C.kind==='barber'?'servicio':'producto'):'Nuevo '+(C.kind==='barber'?'servicio':'producto'),`<form id="product-form"><div class="form-grid">${field('Nombre','name',p.name,'text','required maxlength="80"')}${field('Categoría','category',p.category,'text','required maxlength="40"')}${field('Precio en soles','price',p.price,'number','min="0" max="100000" step="0.01" required')}${C.kind==='barber'?field('Duración en minutos','duration',p.duration,'number','min="15" max="180" step="15" required'):field('Existencias disponibles','stock',p.stock,'number','min="0" max="100000" step="1" required')}</div><label class="check-label"><input type="checkbox" name="active" ${p.active?'checked':''}> Disponible para nuevos registros</label>${hint('Cambiar el precio o desactivar este elemento no modifica los registros anteriores.')}${formEnd()}</form>`);}
+function customerForm(id){const c=state.customers.find(x=>x.id===id)||{name:'',phone:'',note:''};activeId=id||null;modal(id?'Editar cliente':'Nuevo cliente de ejemplo',`<form id="customer-form">${field('Nombre ficticio','name',c.name,'text','required maxlength="70" placeholder="Ej. Cliente Demo"')}${field('Teléfono de prueba (opcional)','phone',c.phone,'tel','maxlength="20" placeholder="No uses datos personales reales"')}${area('Notas de atención','note',c.note)}${formEnd()}</form>`);}
+function recordForm(id){const r=state.records.find(x=>x.id===id), p=state.products.find(p=>p.active), base=r||{customerId:state.customers[0]?.id,date:day,time:'09:00',staff:C.staff[0],serviceId:p?.id||'',total:0,deposit:0,equipment:'',problem:'',diagnosis:'',note:'',channel:'Recojo'};activeId=id||null;
+ let body=select('Cliente de ejemplo','customerId',optionsCustomers(),base.customerId,'required')+select(C.kind==='barber'?'Profesional':'Responsable','staff',C.staff,base.staff)+field('Fecha','date',base.date,'date','required')+field('Hora','time',base.time,'time','required');
+ if(C.kind==='barber')body+=select('Servicio','serviceId',state.products.filter(p=>p.active||p.id===base.serviceId).map(p=>[p.id,`${p.name} · ${p.duration} min · ${money(p.price)}`]),base.serviceId,'required')+`<p class="muted full">Atención de 09:00 a 19:00. No se permiten citas superpuestas del mismo profesional. ${r?'Si cambias el servicio se actualizan el importe y la duración.':''}</p>`;
+ if(C.kind==='tech')body+=field('Equipo / modelo','equipment',base.equipment,'text','required maxlength="100"')+field('Presupuesto total (S/)','total',base.total,'number','min="0" max="100000" step="0.01" required')+field('Adelanto registrado (S/)','deposit',base.deposit,'number','min="0" max="100000" step="0.01" required')+area('Falla reportada','problem',base.problem,'required')+area('Diagnóstico / trabajo realizado','diagnosis',base.diagnosis);
+ if(C.kind==='food')body+=select('Modalidad','channel',['Mesa 01','Mesa 02','Mesa 03','Mesa 04','Recojo','Delivery'],base.channel)+`<p class="muted full">Los productos y cantidades quedan fijados al registrar la venta. Para corregirlos, cancela el pedido y crea uno nuevo.</p>`;
+ body+=area(C.kind==='tech'?'Accesorios y observaciones':'Notas / preferencias','note',base.note);
+ modal(r?'Editar '+r.id:C.kind==='barber'?'Agendar nueva cita':'Ingresar equipo al taller',`<form id="record-form"><div class="form-grid">${body}</div>${formEnd(r?'Guardar cambios':C.kind==='barber'?'Agendar cita':'Crear orden')}</form>`);
 }
-
-// ---------- Carrito ----------
-function totals() {
-  const entries = Object.entries(state.cart);
-  const subtotal = entries.reduce((s, [id, q]) => s + find(id).price * q, 0);
-  const fee = entries.length && state.mode === "delivery" ? DELIVERY_FEE : 0;
-  const count = entries.reduce((s, [, q]) => s + q, 0);
-  return { entries, subtotal, fee, total: subtotal + fee, count };
+function detail(id){const r=state.records.find(x=>x.id===id);if(!r)return;activeId=id;const c=customer(r), final=r.status===C.states.at(-2)||r.status==='Cancelado'||r.status==='Cancelada';let items='';
+ if(C.kind==='food')items=`<h3>Productos del pedido</h3>${r.items.map(i=>`<div class="legend"><span>${i.qty} × ${esc(i.name)}</span><b>${money(i.price*i.qty)}</b></div>`).join('')}`;
+ if(C.kind==='tech')items=`<h3>Diagnóstico y repuestos</h3><div class="note">${esc(r.diagnosis)||'Diagnóstico pendiente de registrar.'}</div>${r.parts.map(p=>`<div class="legend"><span>${p.qty} × ${esc(p.name)}</span><span>${money(p.price*p.qty)}</span></div>`).join('')}${!final?btn('+ Asignar repuesto','add-part',id,'small'):''}<p class="muted" style="margin-top:10px">El presupuesto total se edita en la ficha y debe incluir materiales y mano de obra. El listado de repuestos es informativo; no se suma por segunda vez.</p>`;
+ const progress=C.states.indexOf(r.status);
+ modal(`${esc(r.id)} ${badge(r.status)}`,`<dl class="info-list"><div><dt>Cliente</dt><dd>${esc(c.name)}</dd></div><div><dt>Fecha y hora</dt><dd>${esc(r.date)} · ${esc(r.time)}</dd></div><div><dt>${C.kind==='tech'?'Equipo':C.kind==='barber'?'Servicio':'Modalidad'}</dt><dd>${esc(C.kind==='tech'?r.equipment:C.kind==='barber'?r.serviceName:r.channel)}</dd></div><div><dt>Responsable</dt><dd>${esc(r.staff)}</dd></div>${C.kind==='barber'?`<div><dt>Duración</dt><dd>${r.duration} minutos</dd></div>`:''}${C.kind==='tech'?`<div><dt>Falla reportada</dt><dd>${esc(r.problem)}</dd></div><div><dt>Adelanto / saldo previsto</dt><dd>${money(r.deposit)} / ${money(Math.max(0,r.total-r.deposit))}</dd></div>`:''}</dl><div class="progress-steps" aria-label="Etapa ${progress+1}">${C.states.slice(0,-1).map((s,i)=>`<span class="${i<=progress&&!r.status.startsWith('Cancel')?'on':''}" title="${s}"></span>`).join('')}</div>${items}${r.note?`<div class="note"><strong>Observaciones</strong><br>${esc(r.note)}</div>`:''}<div class="total"><span>${C.kind==='tech'?'Presupuesto total':'Total registrado'}</span><strong>${recordTotal(r)}</strong></div><div class="actions">${!final?btn('Avanzar a '+C.states[progress+1]+' →','advance',id,'primary'):''}${!final?btn('Editar ficha','edit-record',id):''}${!final?btn('Cancelar '+C.unit,'cancel-record',id,'danger'):''}${btn('Copiar resumen','copy-record',id)}</div><h3 style="margin-top:28px">Historial de actividad</h3><ul class="timeline">${[...r.history].reverse().map(h=>`<li>${esc(h.text)}<small>${new Date(h.date).toLocaleString('es-PE')}</small></li>`).join('')}</ul>${hint('Esta ficha solo existe en la demostración de este navegador.')}`);
 }
-
-function summaryText(t) {
-  if (!t.entries.length) return "Tu resumen aparecerá aquí cuando agregues platos.";
-  const lines = t.entries.map(([id, q]) => {
-    const i = find(id);
-    return `${q} x ${i.name} — ${money(i.price * q)}`;
-  });
-  return [
-    "MESA CRIOLLA — PEDIDO DE DEMOSTRACIÓN",
-    "(Restaurante ficticio, este pedido no es real)",
-    "",
-    ...lines,
-    "",
-    `Subtotal: ${money(t.subtotal)}`,
-    `${state.mode === "delivery" ? "Delivery" : "Recojo en local"}: ${money(t.fee)}`,
-    `TOTAL: ${money(t.total)}`
-  ].join("\n");
-}
-
-function renderCart() {
-  const t = totals();
-  $("empty").hidden = t.entries.length > 0;
-  $("lines").innerHTML = t.entries.map(([id, q]) => {
-    const i = find(id);
-    return `<li class="line">
-      <span class="name">${i.name}</span>
-      <span class="sub">${money(i.price * q)}</span>
-      <span class="unit">${money(i.price)} c/u</span>
-      <div class="qty">
-        <button data-dec="${id}" aria-label="Quitar una unidad de ${i.name}">−</button>
-        <span class="n" aria-live="polite">${q}</span>
-        <button data-inc="${id}" aria-label="Agregar una unidad de ${i.name}">+</button>
-        <button class="rm" data-rm="${id}" aria-label="Quitar ${i.name} del pedido">Quitar</button>
-      </div>
-    </li>`;
-  }).join("");
-  $("subtotal").textContent = money(t.subtotal);
-  $("fee").textContent = money(t.fee);
-  $("total").textContent = money(t.total);
-  $("summary").textContent = summaryText(t);
-  $("copy").disabled = !t.entries.length;
-  $("clear").disabled = !t.entries.length;
-  $("fab").hidden = !t.count;
-  $("fab-n").textContent = t.count;
-  $("fab-t").textContent = money(t.total);
-}
-
-function change(id, delta) {
-  const q = (state.cart[id] || 0) + delta;
-  if (q <= 0) delete state.cart[id]; else state.cart[id] = Math.min(q, 20);
-  $("status").textContent = "";
-  renderCart();
-}
-
-// ---------- Eventos ----------
-$("tabs").addEventListener("click", e => {
-  const b = e.target.closest("[data-cat]");
-  if (!b) return;
-  state.cat = b.dataset.cat;
-  renderTabs();
-  renderMenu();
+function advance(id){const r=state.records.find(x=>x.id===id), i=C.states.indexOf(r?.status);if(!r||i<0||i>=C.states.length-2)return;r.status=C.states[i+1];r.history.push({date:stamp(),text:'Estado actualizado: '+r.status});save();render();if($('#modal').open)detail(id);toast(r.id+': '+r.status);}
+function cancelRecord(id){const r=state.records.find(x=>x.id===id);if(!r||r.status===C.states.at(-2)||r.status.startsWith('Cancel'))return;modal('Cancelar '+esc(r.id),`<p class="muted">${C.kind==='food'?'Los productos de este pedido volverán al stock.':C.kind==='tech'?'Los repuestos asignados volverán al stock.':'Se liberará el horario de esta cita.'} La ficha conservará el estado cancelado en el historial.</p><div class="modal-actions">${btn('Volver a la ficha','detail',id)}${btn('Confirmar cancelación','confirm-cancel',id,'danger')}</div>`);}
+function exportCSV(){const quote=v=>'"'+String(v??'').replace(/"/g,'""').replace(/^[=+@-]/,"'$&")+'"';const rows=[['Referencia','Cliente','Fecha','Hora','Estado','Total S/','Responsable','Detalle'],...state.records.map(r=>[r.id,customer(r).name,r.date,r.time,r.status,r.total,r.staff,C.kind==='tech'?r.equipment+' - '+r.problem:C.kind==='barber'?r.serviceName:r.items.map(i=>i.qty+'x '+i.name).join(' / ')])];download(C.slug+'-registros.csv','\uFEFF'+rows.map(r=>r.map(quote).join(',')).join('\r\n'),'text/csv;charset=utf-8');toast('CSV descargado con todos los registros.');}
+function download(name,content,type){const u=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=u;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000);}
+function newId(){return (C.kind==='food'?'PED':C.kind==='barber'?'CIT':'OT')+'-'+String(state.next++).padStart(4,'0');}
+function showError(t){const e=$('#form-error');if(e)e.textContent=t;}
+document.addEventListener('click',async e=>{const n=e.target.closest('[data-action],[data-view]');if(!n)return;if(n.dataset.view){navigate(n.dataset.view);return;}const a=n.dataset.action,id=n.dataset.id;
+ switch(a){
+ case 'home':case 'records':case 'pos':case 'catalog':navigate(a);break;
+ case 'close':closeModal();break;
+ case 'today':day=today();render();break;
+ case 'new-record':recordForm();break;
+ case 'edit-record':recordForm(id);break;
+ case 'detail':detail(id);break;
+ case 'advance':advance(id);break;
+ case 'cancel-record':cancelRecord(id);break;
+ case 'confirm-cancel':{const r=state.records.find(x=>x.id===id);if(!r||r.status.startsWith('Cancel'))return;const restore=C.kind==='food'?r.items:r.parts;restore.forEach(i=>{const p=state.products.find(x=>x.id===i.productId);if(p)p.stock+=i.qty;});r.status=C.states.at(-1);r.history.push({date:stamp(),text:'Registro cancelado'+(restore.length?'; existencias restituidas':'')});save();render();detail(id);toast('Registro cancelado.');break;}
+ case 'new-product':productForm();break;
+ case 'edit-product':productForm(id);break;
+ case 'new-customer':customerForm();break;
+ case 'edit-customer':customerForm(id);break;
+ case 'customer-history':{const c=state.customers.find(c=>c.id===id);modal('Historial · '+esc(c.name),`${hint(esc(c.note)||'Sin notas de atención.')}<br>${recordTable(state.records.filter(r=>r.customerId===id))}`);break;}
+ case 'add-cart':{const p=state.products.find(p=>p.id===id);if(!p||!p.active)return;const i=cart.find(i=>i.productId===id);if((i?.qty||0)>=p.stock){toast('No hay más unidades disponibles.');return;}if(i)i.qty++;else cart.push({productId:id,name:p.name,price:p.price,qty:1});refreshCart();break;}
+ case 'less-cart':{const i=cart.find(i=>i.productId===id);if(i){i.qty--;cart=cart.filter(i=>i.qty>0);refreshCart();}break;}
+ case 'add-part':{activeId=id;modal('Asignar repuesto · '+esc(id),`<form id="part-form">${select('Repuesto','productId',state.products.filter(p=>p.active&&p.stock>0).map(p=>[p.id,`${p.name} · ${p.stock} disponibles · ${money(p.price)}`]),'','required')}${field('Cantidad','qty',1,'number','min="1" max="10000" step="1" required')}${hint('Al asignar se descuenta el inventario. El presupuesto total se mantiene hasta que lo edites en la ficha.')}${formEnd('Asignar repuesto')}</form>`);break;}
+ case 'copy-record':{const r=state.records.find(x=>x.id===id);const text=`DEMO ${C.name}\n${r.id} · ${r.status}\nCliente ficticio: ${customer(r).name}\nFecha: ${r.date} ${r.time}\n${C.kind==='tech'?r.equipment+'\nFalla: '+r.problem:C.kind==='barber'?r.serviceName+' · '+r.staff:r.items.map(i=>i.qty+' × '+i.name).join('\n')}\nTotal: ${money(r.total)}\nObservaciones: ${r.note||'—'}\nRegistro de prueba; no confirma un servicio real.`;try{await navigator.clipboard.writeText(text);toast('Resumen copiado.');}catch{modal('Resumen para copiar',`<div class="field"><label for="copy-text">Selecciona y copia este resumen</label><textarea id="copy-text" readonly rows="12">${esc(text)}</textarea></div>`);}break;}
+ case 'export-records':exportCSV();break;
+ case 'backup':download(C.slug+'-demo.json',JSON.stringify(state,null,2),'application/json');toast('Copia de datos descargada.');break;
+ case 'reset':modal('Restablecer esta demostración',`<p class="muted">Se reemplazarán todos los registros locales de ${C.name} por los ejemplos iniciales. Descarga una copia antes si deseas conservar tu prueba.</p><div class="modal-actions">${btn('Conservar datos','close')}${btn('Restablecer ahora','confirm-reset','','danger')}</div>`);break;
+ case 'confirm-reset':state=seed();cart=[];day=today();save();closeModal();navigate('home');toast('Ejemplos restaurados.');break;
+ case 'help':modal('Prueba el sistema de principio a fin',`<div class="note">${C.kind==='food'?'1. Abre Nueva venta y agrega productos.<br>2. Registra el pedido.<br>3. Avanza de preparación a listo y luego entrega.<br>4. Revisa el stock y el resumen del día.':C.kind==='barber'?'1. Crea un cliente de ejemplo.<br>2. Agenda un servicio con fecha y profesional.<br>3. Intenta repetir el horario: se detecta el cruce.<br>4. Abre la cita, inicia la atención y complétala.':'1. Ingresa un equipo y describe su falla.<br>2. Registra diagnóstico y presupuesto en la ficha.<br>3. Asigna un repuesto y comprueba el inventario.<br>4. Avanza la reparación hasta la entrega.'}</div>${hint('Usa únicamente información ficticia. En Datos de la demo puedes exportar registros o restablecer todo.')}`);break;
+ }
 });
-
-$("menu").addEventListener("click", e => {
-  const b = e.target.closest("[data-add]");
-  if (b) change(b.dataset.add, 1);
-});
-
-$("lines").addEventListener("click", e => {
-  const b = e.target.closest("button");
-  if (!b) return;
-  if (b.dataset.inc) change(b.dataset.inc, 1);
-  else if (b.dataset.dec) change(b.dataset.dec, -1);
-  else if (b.dataset.rm) change(b.dataset.rm, -999);
-});
-
-document.querySelectorAll('input[name="modo"]').forEach(r =>
-  r.addEventListener("change", () => { state.mode = r.value; $("status").textContent = ""; renderCart(); })
-);
-
-$("clear").addEventListener("click", () => {
-  state.cart = {};
-  $("status").textContent = "";
-  renderCart();
-});
-
-$("copy").addEventListener("click", async () => {
-  const text = summaryText(totals());
-  let ok = false;
-  try {
-    await navigator.clipboard.writeText(text);
-    ok = true;
-  } catch (_) {
-    // Respaldo para cuando el navegador bloquea el portapapeles en archivos locales
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    try { ok = document.execCommand("copy"); } catch (_) {}
-    ta.remove();
+document.addEventListener('input',e=>{if(e.target.id!=='search')return;search=e.target.value;if(view==='records')$('#record-results').innerHTML=filteredRecords();if(view==='catalog')$('#catalog-results').innerHTML=productCards();if(view==='customers')$('#customer-results').innerHTML=customerRows();if(view==='pos')$('#pos-products').innerHTML=posProducts(state.products.filter(p=>p.active&&p.name.toLowerCase().includes(search.toLowerCase())));});
+document.addEventListener('change',e=>{if(e.target.id==='status-filter'){filter=e.target.value;$('#record-results').innerHTML=filteredRecords();}if(e.target.id==='selected-day'&&e.target.value){day=e.target.value;render();}});
+document.addEventListener('submit',e=>{const form=e.target;if(!['product-form','customer-form','record-form','pos-form','part-form'].includes(form.id))return;e.preventDefault();const f=Object.fromEntries(new FormData(form));
+ if(form.id==='customer-form'){if(!f.name.trim()){showError('Escribe un nombre ficticio.');return;}const data={name:f.name.trim(),phone:f.phone.trim(),note:f.note.trim()};if(activeId)Object.assign(state.customers.find(c=>c.id===activeId),data);else state.customers.push({id:'c-'+crypto.randomUUID(),...data});save();closeModal();render();toast('Cliente guardado.');}
+ if(form.id==='product-form'){if(!f.name.trim()||!f.category.trim()){showError('Completa nombre y categoría.');return;}const data={name:f.name.trim(),category:f.category.trim(),price:Number(f.price),stock:C.kind==='barber'?0:Number(f.stock),duration:C.kind==='barber'?Number(f.duration):0,active:f.active==='on'};if(!Number.isFinite(data.price)||data.price<0||!Number.isInteger(data.stock)||data.stock<0){showError('Revisa precio y existencias.');return;}if(activeId)Object.assign(state.products.find(p=>p.id===activeId),data);else state.products.push({id:'p-'+crypto.randomUUID(),...data});save();closeModal();render();toast('Catálogo actualizado.');}
+ if(form.id==='pos-form'){
+  if(!cart.length){showError('Agrega al menos un producto.');return;}if(!state.customers.some(c=>c.id===f.customerId)){showError('Selecciona un cliente.');return;}
+  for(const i of cart){const p=state.products.find(p=>p.id===i.productId);if(!p||!p.active||p.stock<i.qty){showError('Revisa el stock: '+i.name);return;}}
+  const now=new Date();const r={id:newId(),customerId:f.customerId,date:day,time:now.toTimeString().slice(0,5),staff:C.staff[0],status:C.states[0],created:stamp(),note:f.note.trim(),channel:f.channel,items:cart.map(i=>({...i})),total:cart.reduce((s,i)=>s+i.price*i.qty,0),parts:[],history:[{date:stamp(),text:'Pedido registrado y enviado a cocina'}]};cart.forEach(i=>state.products.find(p=>p.id===i.productId).stock-=i.qty);state.records.push(r);cart=[];save();navigate('home');toast(r.id+' registrado en cocina.');
+ }
+ if(form.id==='record-form'){
+  const old=activeId?state.records.find(r=>r.id===activeId):null;if(!state.customers.some(c=>c.id===f.customerId)||!f.date||!f.time){showError('Completa cliente, fecha y hora.');return;}if(old&&(old.status===C.states.at(-2)||old.status.startsWith('Cancel'))){showError('Este registro ya está cerrado.');return;}
+  let data={customerId:f.customerId,date:f.date,time:f.time,staff:f.staff,note:f.note.trim()};
+  if(C.kind==='barber'){
+   const p=state.products.find(p=>p.id===f.serviceId);if(!p){showError('Selecciona un servicio activo.');return;}const duration=old&&old.serviceId===p.id?old.duration:p.duration,total=old&&old.serviceId===p.id?old.total:p.price,start=mins(f.time),end=start+duration;
+   if(start<540||end>1140){showError('La cita debe comenzar y terminar entre las 09:00 y las 19:00.');return;}
+   if(state.records.some(r=>r.id!==activeId&&r.date===f.date&&r.staff===f.staff&&!r.status.startsWith('Cancel')&&start<mins(r.time)+r.duration&&end>mins(r.time))){showError('Ese profesional ya tiene una cita que se cruza con este horario. Elige otra hora o profesional.');return;}
+   Object.assign(data,{serviceId:p.id,serviceName:old&&old.serviceId===p.id?old.serviceName:p.name,duration,total});
   }
-  $("status").textContent = ok
-    ? "Resumen copiado. Recuerda: es solo una demo."
-    : "No se pudo copiar. Selecciona el texto del resumen y cópialo con Ctrl + C.";
+  if(C.kind==='tech'){
+   if(!f.equipment.trim()||!f.problem.trim()){showError('Completa equipo y falla reportada.');return;}const total=Number(f.total),deposit=Number(f.deposit);if(!Number.isFinite(total)||!Number.isFinite(deposit)||total<0||deposit<0||deposit>total){showError('El adelanto debe estar entre cero y el presupuesto total.');return;}Object.assign(data,{equipment:f.equipment.trim(),problem:f.problem.trim(),diagnosis:f.diagnosis.trim(),total,deposit});
+  }
+  if(C.kind==='food')data.channel=f.channel;
+  if(old){Object.assign(old,data);old.history.push({date:stamp(),text:'Ficha editada'});}else{state.records.push({id:newId(),...data,status:C.states[0],created:stamp(),items:[],parts:[],history:[{date:stamp(),text:C.kind==='barber'?'Cita agendada':'Equipo ingresado al taller'}]});}
+  const target=old?.id;save();closeModal();render();if(target)detail(target);toast(old?'Ficha actualizada.':'Registro creado.');
+ }
+ if(form.id==='part-form'){const r=state.records.find(r=>r.id===activeId),p=state.products.find(p=>p.id===f.productId),qty=Number(f.qty);if(!r||r.status==='Entregado'||r.status==='Cancelado'||!p||!p.active||!Number.isInteger(qty)||qty<1||qty>p.stock){showError('Selecciona un repuesto y una cantidad disponible.');return;}p.stock-=qty;r.parts.push({productId:p.id,name:p.name,qty,price:p.price});r.history.push({date:stamp(),text:`Repuesto asignado: ${qty} × ${p.name}`});save();render();detail(r.id);toast('Repuesto asignado; inventario actualizado.');}
 });
-
-renderTabs();
-renderMenu();
-renderCart();
+// Reconcile an update made in another tab instead of silently overwriting it.
+window.addEventListener('storage',e=>{if(e.key!==key||!e.newValue)return;try{const next=JSON.parse(e.newValue);if(next.version!==3)return;state=next;cart=[];if($('#modal').open)closeModal();render();toast('Datos actualizados desde otra pestaña.');}catch{}});
+save();render();
+})();
